@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Threshold DEX mock</title>
+<meta name="description" content="Interactive mock of a perpetual-futures venue that clears threshold-encrypted orders in frequent batch auctions. All data is simulated.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="2" y="6" width="18" height="3" rx="1.5" fill="#34D1B2"></rect><rect x="2" y="13" width="18" height="3" rx="1.5" fill="#34D1B2"></rect></svg>
+    <span id="brand-name">Threshold DEX</span>
+  </div>
+  <span class="badge mono">Mock · simulated data</span>
+  <div class="trade-only seg-group" role="group" aria-label="Market" id="market-tabs">
+    <button type="button" class="seg mono" data-market="BTC-PERP" aria-pressed="true">BTC-PERP</button>
+    <button type="button" class="seg mono" data-market="ETH-PERP" aria-pressed="false">ETH-PERP</button>
+  </div>
+  <div class="trade-only stats">
+    <div><div class="label">Index (simulated)</div><div class="mono" id="index-price">0</div></div>
+    <div><div class="label">Funding, accrued per batch</div><div class="mono">+0.0031% / h</div></div>
+  </div>
+  <span class="engine-only muted">How each batch is sealed, unlocked and cleared</span>
+  <div class="grow"></div>
+  <nav aria-label="Views" class="views">
+    <a href="#trade" id="nav-trade">Trade</a>
+    <a href="#engine" id="nav-engine">Engine room</a>
+  </nav>
+</header>
+
+<!-- ============ TRADE VIEW ============ -->
+<div id="view-trade">
+  <section class="strip" aria-label="Current batch">
+    <div class="strip-title">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="#34D1B2"></rect><path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="#34D1B2" stroke-width="1.6"></path></svg>
+      <span>Batch <span class="mono">#<span id="batch-no">0</span></span> sealing</span>
+    </div>
+    <div class="progress" aria-hidden="true"><div id="seal-bar"></div></div>
+    <span class="mono muted ms-left">clears in <span id="ms-left">100</span> ms</span>
+    <span>Last batch: <span class="mono" id="last-orders">0</span> orders, one price <span class="mono teal" id="last-price-strip">0</span></span>
+    <span class="pill">Keypers 5 of 5 · key after <span class="mono" id="last-key">0</span> ms</span>
+  </section>
+
+  <main class="layout">
+    <section class="panel ticket" aria-labelledby="ticket-h">
+      <h2 id="ticket-h">Place order · <span id="ticket-market">BTC-PERP</span></h2>
+      <div class="side-group" role="group" aria-label="Side">
+        <button type="button" class="side buy" id="side-buy" aria-pressed="true">Buy</button>
+        <button type="button" class="side sell" id="side-sell" aria-pressed="false">Sell</button>
+      </div>
+      <div class="field">
+        <label for="size-input">Size (<span id="size-asset">BTC</span>)</label>
+        <input id="size-input" class="mono" inputmode="decimal" value="0.25" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="price-input">Limit price (empty = market, ±0.5% band)</label>
+        <input id="price-input" class="mono" inputmode="decimal" placeholder="Market" autocomplete="off">
+      </div>
+      <button type="button" class="submit" id="submit-btn">Encrypt and buy 0.25 BTC</button>
+      <p class="note">Encrypted in this browser to batch <span class="mono">#<span id="next-batch">0</span></span> with threshold encryption. Nobody can read it until 3 of 4 committee nodes have committed that batch.</p>
+      <div id="order-card" class="order-card" hidden>
+        <div class="label">Your order as it left the browser (illustrative ciphertext)</div>
+        <div class="cipher-box mono" id="order-hex"></div>
+        <ol class="steps" id="order-steps" aria-label="Order progress"></ol>
+      </div>
+    </section>
+
+    <div class="center-col">
+      <section class="panel" aria-labelledby="px-h">
+        <div class="panel-head">
+          <h2 id="px-h">Clearing price per batch</h2>
+          <span class="mono big teal" id="last-price-big">0</span>
+          <span class="muted small">last 60 batches, 6 seconds</span>
+        </div>
+        <div class="bars" id="bars" aria-hidden="true"></div>
+        <p class="note">Each bar is one batch. Every order in it filled at that one price; cancels were applied first, and arrival time inside the batch gave no advantage.</p>
+      </section>
+
+      <div class="row">
+        <section class="panel depth" aria-labelledby="depth-h">
+          <h2 id="depth-h">Public depth, aggregated</h2>
+          <div id="asks"></div>
+          <div class="depth-mid mono teal"><span id="depth-mid">0</span> last clear</div>
+          <div id="bids"></div>
+          <p class="note">Totals per price level after each batch. Single orders and positions are never shown.</p>
+        </section>
+
+        <section class="panel recent" aria-labelledby="recent-h">
+          <div class="panel-head">
+            <h2 id="recent-h">Recent batches</h2>
+            <span class="muted small">one sampled per second; 10 clear every second</span>
+          </div>
+          <div class="scroll-x">
+            <div class="table" role="table" aria-label="Recent batches">
+              <div class="tr th" role="row"><span role="columnheader">Batch</span><span role="columnheader">Orders</span><span role="columnheader">Filled</span><span role="columnheader">Clearing price</span><span role="columnheader">Key after</span></div>
+              <div id="recent-rows"></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <aside class="panel frontrunner" aria-labelledby="fr-h">
+      <h2 id="fr-h">What a front-runner sees</h2>
+      <p class="note">Every order is the same size on the wire. Side, size and price stay unreadable until the batch is committed.</p>
+      <div class="cipher-list mono" id="cipher-list"></div>
+      <div class="sniper">
+        <h3>Sniper bots against a market maker</h3>
+        <div class="meter">
+          <div class="meter-head"><span>Continuous order book</span><span class="mono orange" id="sn-cont">0%</span></div>
+          <div class="track"><div class="fill orange-bg" id="sn-cont-bar"></div></div>
+        </div>
+        <div class="meter">
+          <div class="meter-head"><span>Batch auction, 100 ms</span><span class="mono teal" id="sn-batch">0%</span></div>
+          <div class="track"><div class="fill teal-bg" id="sn-batch-bar"></div></div>
+        </div>
+        <p class="note">Share of price jumps where the market maker is picked off, over <span class="mono" id="sn-n">0</span> simulated jumps. Textbook model (Budish, Cramton and Shim, 2015): five snipers as fast as the market maker. In a batch auction a sniper only wins if the jump lands in the last 1 ms before the cutoff.</p>
+      </div>
+    </aside>
+
+    <section class="panel positions" aria-labelledby="pos-h">
+      <h2 id="pos-h">Position and fills</h2>
+      <p class="muted" id="pos-empty">No position yet. Place an order: it fills at its batch's clearing price, and the fill names the batch.</p>
+      <div id="pos-wrap" hidden>
+        <div class="scroll-x">
+          <div class="table six" role="table" aria-label="Position">
+            <div class="tr th" role="row"><span role="columnheader">Market</span><span role="columnheader">Side</span><span role="columnheader">Size</span><span role="columnheader">Entry</span><span role="columnheader">Mark</span><span role="columnheader">Unrealised PnL</span></div>
+            <div class="tr mono" role="row"><span role="cell" id="pos-market"></span><span role="cell" id="pos-side"></span><span role="cell" id="pos-size"></span><span role="cell" id="pos-entry"></span><span role="cell" id="pos-mark"></span><span role="cell" id="pos-pnl"></span></div>
+          </div>
+        </div>
+        <div class="fills" id="fills"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ============ ENGINE ROOM ============ -->
+<div id="view-engine" hidden>
+  <section class="strip controls" aria-label="Demo controls">
+    <div class="ctl" role="group" aria-labelledby="net-l">
+      <span id="net-l" class="label">Network profile</span>
+      <div class="seg-group" id="profile-btns"></div>
+    </div>
+    <div class="ctl" role="group" aria-labelledby="load-l">
+      <span id="load-l" class="label">Orders per batch</span>
+      <div class="seg-group" id="load-btns"></div>
+    </div>
+    <div class="ctl" role="group" aria-labelledby="kp-l">
+      <span id="kp-l" class="label">Keypers: click to stop or restart</span>
+      <div class="seg-group" id="keyper-btns"></div>
+    </div>
+    <button type="button" class="warn-btn" id="early-btn">Simulate an early share</button>
+    <span class="muted small push-right">10 batches clear every second; the ring replays one in slow motion.</span>
+  </section>
+
+  <div class="banner" id="banner" role="status"></div>
+  <div class="evidence" id="evidence" role="alert" hidden>
+    <span class="ev-title">Early share caught</span>
+    <span id="ev-text"></span>
+    <button type="button" id="ev-dismiss">Dismiss</button>
+  </div>
+
+  <main class="layout">
+    <section class="panel ring-panel" aria-labelledby="ring-h">
+      <div class="panel-head">
+        <h2 id="ring-h">Keyper network, batch <span class="mono">#<span id="ring-bn">0</span></span></h2>
+        <span class="muted small">slow motion, flight times to scale</span>
+      </div>
+      <svg id="ring-svg" role="img" aria-label="Five keypers on a ring send key shares to the batch in the middle; the third share opens it"></svg>
+      <p class="note">Click a keyper to stop or restart it.</p>
+    </section>
+
+    <section class="panel ring-legend" aria-labelledby="steps-h">
+      <h2 id="steps-h">What you are seeing</h2>
+      <p class="stage mono" id="ring-stage" aria-live="polite">Starting</p>
+      <ol class="ring-steps" id="ring-steps">
+        <li data-step="0"><span class="swatch blue-bg"></span><span><b>Committee commits the batch.</b> 3 of 4 nodes sign the digest of the encrypted orders. Nobody has read them.</span></li>
+        <li data-step="1"><span class="swatch blue-ring"></span><span><b>Certificate goes to the keypers.</b> Each keyper checks the 3 signatures; it never sees order contents.</span></li>
+        <li data-step="2"><span class="swatch teal-bg"></span><span><b>Keypers send their shares.</b> One share each per batch, however many orders it holds. Shares also gossip around the ring.</span></li>
+        <li data-step="3"><span class="swatch teal-ring"></span><span><b>The third share opens the batch.</b> Shares that arrive later are not needed, so distant keypers add safety, not delay.</span></li>
+        <li data-step="4"><span class="swatch orange-bg"></span><span><b>Decrypt and clear.</b> Every committee node decrypts the batch and clears each market at one price.</span></li>
+      </ol>
+      <div class="legend-keys">
+        <span><i class="dot amber-bg"></i>early share (evidence)</span>
+        <span><i class="dot red-bg"></i>keyper offline</span>
+      </div>
+    </section>
+
+    <section class="panel pipe" aria-labelledby="pipe-h">
+      <div class="panel-head">
+        <h2 id="pipe-h">Batch <span class="mono">#<span id="pipe-bn">0</span></span>, time per stage</h2>
+        <span class="mono big" id="pipe-total">0</span>
+        <span class="muted small" id="pipe-sub"></span>
+      </div>
+      <div class="pipe-bar" id="pipe-bar" aria-hidden="true"></div>
+      <div class="table" role="table" aria-label="Time per stage" id="pipe-legend"></div>
+      <p class="note">The client's trip to the gateway is not included. Batches overlap: batch n is decrypted while batch n+1 collects orders.</p>
+    </section>
+
+    <section class="panel dec" aria-labelledby="dec-h">
+      <h2 id="dec-h">Decryption load</h2>
+      <div><div class="mono huge" id="dec-ms">0</div><div class="muted small">per batch for <span id="dec-load">1,000</span> orders on 16 cores</div></div>
+      <div><div class="mono big" id="dec-cores">0</div><div class="muted small">cores keep pace with 10 batches a second</div></div>
+      <p class="warnbox" id="dec-warn" hidden>At this load 16 cores fall behind. Decryption, not the key round, sets the hardware budget.</p>
+      <p class="note">Each order costs one pairing on the executing node, about 0.6 to 1 ms per core. The key round does not grow with batch size: one share per keyper opens the whole batch.</p>
+    </section>
+
+    <section class="panel regions" aria-labelledby="map-h">
+      <div class="panel-head">
+        <h2 id="map-h">Nodes by region</h2>
+        <span class="muted small">4 committee nodes (3 must sign) and 5 keypers (3 shares open a batch)</span>
+      </div>
+      <div class="region-row" id="regions"></div>
+    </section>
+
+    <section class="panel race" aria-labelledby="race-h">
+      <h2 id="race-h">Key shares for batch <span class="mono">#<span id="race-bn">0</span></span></h2>
+      <p class="note">Time from commit certificate to share. Only the third share matters.</p>
+      <div id="race"></div>
+    </section>
+
+    <section class="panel log" aria-labelledby="log-h">
+      <h2 id="log-h">Batch log</h2>
+      <div class="scroll-x">
+        <div class="table eight" role="table" aria-label="Batch log">
+          <div class="tr th" role="row"><span role="columnheader">Batch</span><span role="columnheader">Orders</span><span role="columnheader">Commit</span><span role="columnheader">Key</span><span role="columnheader">Decrypt</span><span role="columnheader">End to end</span><span role="columnheader">State root</span><span role="columnheader">Status</span></div>
+          <div id="log-rows"></div>
+        </div>
+      </div>
+      <p class="note">All four committee nodes compute the same state root from the same decrypted batch.</p>
+    </section>
+  </main>
+</div>
+
+<footer class="foot">
+  Interactive mock with simulated data and illustrative ciphertexts; no orders, keys or funds are real. Based on threshold encryption as used by <a href="https://www.shutter.network" rel="noopener">Shutter Network</a>. Figures are design estimates for illustration.
+</footer>
+
+<script src="js/common.js"></script>
+<script src="js/trade.js"></script>
+<script src="js/ring.js"></script>
+<script src="js/engine.js"></script>
+</body>
+</html>
