@@ -49,7 +49,7 @@ python3 -m http.server 8000
 
 ## Hosting
 
-Static files only. GitHub Pages serves the repository root from the `main` branch (Settings, Pages, Deploy from a branch, `main`, `/ (root)`).
+Static files only, served by GitHub Pages from the `gh-pages` branch. To publish a change, push it to `gh-pages` (or switch the Pages source to `main` under Settings, Pages).
 
 ## Background
 
